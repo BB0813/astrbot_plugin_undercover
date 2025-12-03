@@ -1,10 +1,19 @@
 import time
+import json
+import os
 from typing import List, Dict, Any
+from astrbot.api import logger
+from astrbot.api.star import StarTools
 
 class StatsManager:
     """游戏统计管理器"""
     
     def __init__(self):
+        # 获取数据存储目录
+        self.data_dir = StarTools.get_data_dir()
+        self.stats_file = os.path.join(self.data_dir, "undercover_stats.json")
+        
+        # 初始化统计数据
         self.player_stats = {}  # 玩家统计数据 {user_id: player_stats}
         self.global_stats = {
             "total_games": 0,  # 总游戏次数
@@ -13,6 +22,9 @@ class StatsManager:
             "created_at": time.time(),  # 创建时间
             "last_update_time": time.time(),  # 最后更新时间
         }  # 全局统计数据
+        
+        # 加载已保存的统计数据
+        self.load_stats()
     
     def update_player_stats(self, user_id: str, player_stats: Dict[str, Any]):
         """更新玩家统计数据"""
@@ -21,6 +33,9 @@ class StatsManager:
         
         # 更新总玩家数
         self.global_stats["total_players"] = len(self.player_stats)
+        
+        # 保存统计数据
+        self.save_stats()
     
     def get_player_stats(self, user_id: str) -> Dict[str, Any]:
         """获取玩家统计数据"""
@@ -40,6 +55,9 @@ class StatsManager:
         self.global_stats["avg_players_per_game"] = round(total_players / self.global_stats["total_games"], 2)
         
         self.global_stats["last_update_time"] = time.time()
+        
+        # 保存统计数据
+        self.save_stats()
     
     def get_global_stats(self) -> Dict[str, Any]:
         """获取全局统计数据"""
@@ -127,6 +145,36 @@ class StatsManager:
         rankings.sort(key=lambda x: x["survival_rate"], reverse=True)
         return rankings[:limit]
     
+    def load_stats(self):
+        """加载统计数据"""
+        try:
+            if os.path.exists(self.stats_file):
+                with open(self.stats_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.player_stats = data.get("player_stats", {})
+                    self.global_stats = data.get("global_stats", self.global_stats)
+                    logger.info(f"成功加载统计数据，共 {len(self.player_stats)} 个玩家数据")
+        except Exception as e:
+            logger.error(f"加载统计数据失败：{e}")
+    
+    def save_stats(self):
+        """保存统计数据"""
+        try:
+            # 确保数据目录存在
+            if not os.path.exists(self.data_dir):
+                os.makedirs(self.data_dir, exist_ok=True)
+            
+            data = {
+                "player_stats": self.player_stats,
+                "global_stats": self.global_stats
+            }
+            
+            with open(self.stats_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                logger.info(f"成功保存统计数据，共 {len(self.player_stats)} 个玩家数据")
+        except Exception as e:
+            logger.error(f"保存统计数据失败：{e}")
+    
     def reset_stats(self):
         """重置统计数据"""
         self.player_stats = {}
@@ -137,3 +185,5 @@ class StatsManager:
             "created_at": time.time(),
             "last_update_time": time.time(),
         }
+        # 保存重置后的统计数据
+        self.save_stats()

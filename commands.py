@@ -144,58 +144,6 @@ class CommandHandler:
         room.current_phase = GameState.SPEAKING
         room.current_phase_start_time = time.time()
         
-        # 尝试向每个玩家发送身份和词语
-        sent_success_count = 0
-        for player_id, player in room.players.items():
-            role_name = self.game_logic.get_role_name(player.role)
-            word_text = player.word if player.word else "无"
-            message = GameConfig.MESSAGE_TEMPLATES["ROLE_ASSIGN"].format(
-                role=role_name,
-                word=word_text
-            )
-            
-            try:
-                if event.get_platform_name() == "aiocqhttp":
-                    # 使用 aiocqhttp 平台的 API 发送私聊消息
-                    from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
-                    assert isinstance(event, AiocqhttpMessageEvent)
-                    client = event.bot
-                    
-                    # 构建send_msg API的参数
-                    payloads = {
-                        "message_type": "private",
-                        "user_id": player_id,
-                        "message": message
-                    }
-                    
-                    # 尝试获取group_id，支持临时聊天
-                    group_id = None
-                    
-                    # 方法1：检查event对象是否有group_id属性
-                    if hasattr(event, 'group_id'):
-                        group_id = getattr(event, 'group_id', None)
-                    
-                    # 方法2：检查event对象是否有raw_event属性，且raw_event有group_id属性
-                    elif hasattr(event, 'raw_event'):
-                        raw_event = getattr(event, 'raw_event', None)
-                        if raw_event and hasattr(raw_event, 'group_id'):
-                            group_id = getattr(raw_event, 'group_id', None)
-                    
-                    # 如果获取到group_id，添加到payloads中
-                    if group_id:
-                        payloads["group_id"] = group_id
-                    
-                    # 调用send_msg API发送消息
-                    await client.api.call_action('send_msg', **payloads)
-                    sent_success_count += 1
-                else:
-                    # 其他平台暂不支持私聊，使用群聊提示
-                    yield event.plain_result(f"[CQ:at,qq={player_id}] 您的身份是：{role_name}，词语是：{word_text}")
-                    sent_success_count += 1
-            except Exception as e:
-                # 如果发送失败，记录错误日志
-                logger.error(f"发送私聊消息失败：{e}")
-        
         # 广播游戏开始
         yield event.plain_result(
             GameConfig.MESSAGE_TEMPLATES["GAME_START"].format(
@@ -206,11 +154,8 @@ class CommandHandler:
             )
         )
         
-        # 提示玩家获取身份和词语
-        if sent_success_count == len(room.players):
-            yield event.plain_result("✅ 所有玩家的身份和词语已发送，请查看私信！")
-        else:
-            yield event.plain_result("⚠️ 部分玩家的身份和词语发送失败，请私聊机器人发送 '/undercover myrole' 获取！")
+        # 提示所有玩家使用命令获取身份
+        yield event.plain_result("📌 请私聊机器人发送 '/undercover myrole' 获取您的身份和词语！")
         
         # 通知第一个玩家发言
         first_speaker_id = self.game_logic.get_current_speaker(room)

@@ -135,9 +135,16 @@ class WordManager:
     
     def __init__(self):
         self.builtin_words = BUILTIN_WORDS.copy()
-        self.custom_words = CUSTOM_WORDS.copy()
+        self.custom_words = []
         self.approved_words = []
         self.pending_words = []
+        
+        # 获取数据存储目录
+        self.data_dir = StarTools.get_data_dir()
+        self.words_file = os.path.join(self.data_dir, "undercover_words.json")
+        
+        # 加载已保存的词语数据
+        self.load_words()
     
     def add_custom_word(self, civilian_word: str, undercover_word: str, submitter_id: str = None) -> bool:
         """添加自定义词语"""
@@ -156,6 +163,8 @@ class WordManager:
             "submitter_id": submitter_id,
             "submit_time": time.time()
         })
+        # 保存数据
+        self.save_words()
         return True
     
     def approve_word(self, index: int) -> bool:
@@ -167,6 +176,8 @@ class WordManager:
             # 更新全局词语库
             global WORDS
             WORDS = self.builtin_words + self.custom_words
+            # 保存数据
+            self.save_words()
             return True
         return False
     
@@ -174,6 +185,8 @@ class WordManager:
         """拒绝词语"""
         if 0 <= index < len(self.pending_words):
             self.pending_words.pop(index)
+            # 保存数据
+            self.save_words()
             return True
         return False
     
@@ -185,6 +198,8 @@ class WordManager:
             # 更新全局词语库
             global WORDS
             WORDS = self.builtin_words + self.custom_words
+            # 保存数据
+            self.save_words()
             return True
         return False
     
@@ -217,9 +232,48 @@ class WordManager:
             if keyword in civilian or keyword in undercover:
                 result.append((civilian, undercover))
         return result
+    
+    def load_words(self):
+        """加载词语数据"""
+        try:
+            if os.path.exists(self.words_file):
+                with open(self.words_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.custom_words = data.get("custom_words", [])
+                    self.approved_words = data.get("approved_words", [])
+                    self.pending_words = data.get("pending_words", [])
+                    # 更新全局词语库
+                    global WORDS
+                    WORDS = self.builtin_words + self.custom_words
+                    logger.info(f"成功加载词语数据，共 {len(self.custom_words)} 个自定义词语")
+        except Exception as e:
+            logger.error(f"加载词语数据失败：{e}")
+    
+    def save_words(self):
+        """保存词语数据"""
+        try:
+            # 确保数据目录存在
+            if not os.path.exists(self.data_dir):
+                os.makedirs(self.data_dir, exist_ok=True)
+            
+            data = {
+                "custom_words": self.custom_words,
+                "approved_words": self.approved_words,
+                "pending_words": self.pending_words
+            }
+            
+            with open(self.words_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                logger.info(f"成功保存词语数据，共 {len(self.custom_words)} 个自定义词语")
+        except Exception as e:
+            logger.error(f"保存词语数据失败：{e}")
 
 # 导入需要的模块
 import time
+import json
+import os
+from astrbot.api import logger
+from astrbot.api.star import StarTools
 
 # 创建词语管理器实例
 word_manager = WordManager()
