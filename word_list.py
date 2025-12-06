@@ -1,3 +1,10 @@
+# 导入需要的模块
+import time
+import json
+import os
+from astrbot.api import logger
+from astrbot.api.star import StarTools
+
 # 谁是卧底词语库
 # 格式：(平民词, 卧底词)
 
@@ -267,13 +274,6 @@ class WordManager:
                 logger.info(f"成功保存词语数据，共 {len(self.custom_words)} 个自定义词语")
         except Exception as e:
             logger.error(f"保存词语数据失败：{e}")
-
-# 导入需要的模块
-import time
-import json
-import os
-from astrbot.api import logger
-from astrbot.api.star import StarTools
 
 # 创建词语管理器实例
 word_manager = WordManager()
