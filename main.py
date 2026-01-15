@@ -65,6 +65,7 @@ class UndercoverPlugin(Star):
             help_text += "/undercover vote <玩家> - 游戏中投票\n"
             help_text += "/undercover end - 结束游戏（房主）\n"
             help_text += "/undercover add <词语1> <词语2> - 添加词语对\n"
+            help_text += "/undercover word - 查看我的词语(请私聊使用)\n"
             help_text += "/undercover list - 查看游戏列表\n"
             yield event.plain_result(help_text)
             return
@@ -95,6 +96,9 @@ class UndercoverPlugin(Star):
                 yield result
         elif sub_cmd == "add":
             async for result in self.add_word_pair(event, args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else ""):
+                yield result
+        elif sub_cmd == "word":
+            async for result in self.get_word(event):
                 yield result
         elif sub_cmd == "list":
             async for result in self.list_games(event):
@@ -166,7 +170,8 @@ class UndercoverPlugin(Star):
         self.user_rooms[user_id] = room_id
         
         # 通知房间内所有玩家
-        await self.notify_room(game_room, f"玩家 {user_name} 加入了游戏")
+        async for r in self.notify_room(event, f"玩家 {user_name} 加入了游戏"):
+            yield r
         yield event.plain_result(f"成功加入房间 {room_id}")
     
     async def start_game(self, event: AstrMessageEvent):
@@ -230,14 +235,17 @@ class UndercoverPlugin(Star):
         game_room.current_speaker_index = 0
         
         # 通知所有玩家游戏开始
-        await self.notify_room(game_room, "游戏开始！\n" 
+        async for r in self.notify_room(event, "游戏开始！\n" 
                               f"本轮词语：[机密]\n" 
-                              f"玩家列表：{', '.join(p.user_name for p in game_room.players)}")
+                              f"玩家列表：{', '.join(p.user_name for p in game_room.players)}\n"
+                              "请私聊机器人发送 /undercover word 查看你的词语"):
+            yield r
         
         # 通知当前发言玩家
         current_player = game_room.speech_order[game_room.current_speaker_index]
-        await self.notify_room(game_room, f"第 {game_room.round} 轮发言开始！\n" 
-                              f"当前发言玩家：{current_player.user_name}")
+        async for r in self.notify_room(event, f"第 {game_room.round} 轮发言开始！\n" 
+                              f"当前发言玩家：{current_player.user_name}"):
+            yield r
     
     async def leave_game(self, event: AstrMessageEvent):
         """离开游戏房间"""
@@ -261,14 +269,16 @@ class UndercoverPlugin(Star):
                 new_owner = game_room.players[0]
                 game_room.owner_id = new_owner.user_id
                 game_room.owner_name = new_owner.user_name
-                await self.notify_room(game_room, f"房主 {user_name} 已离开，新房主：{new_owner.user_name}")
+                async for r in self.notify_room(event, f"房主 {user_name} 已离开，新房主：{new_owner.user_name}"):
+                    yield r
             else:
                 # 房间为空，删除房间
                 del self.game_rooms[room_id]
                 yield event.plain_result("你已离开游戏房间")
                 return
         else:
-            await self.notify_room(game_room, f"玩家 {user_name} 已离开游戏")
+            async for r in self.notify_room(event, f"玩家 {user_name} 已离开游戏"):
+                yield r
         
         yield event.plain_result("你已离开游戏房间")
     
@@ -301,7 +311,8 @@ class UndercoverPlugin(Star):
             return
         
         # 广播发言内容
-        await self.notify_room(game_room, f"{user_name}：{content}")
+        async for r in self.notify_room(event, f"{user_name}：{content}"):
+            yield r
         
         # 切换到下一个发言玩家
         game_room.current_speaker_index += 1
@@ -309,12 +320,14 @@ class UndercoverPlugin(Star):
         # 检查是否所有人都已发言
         if game_room.current_speaker_index >= len(game_room.speech_order):
             # 发言结束，进入投票阶段
-            await self.notify_room(game_room, "发言结束，开始投票！\n" 
-                                  "请使用 /undercover vote <玩家> 进行投票")
+            async for r in self.notify_room(event, "发言结束，开始投票！\n" 
+                                  "请使用 /undercover vote <玩家> 进行投票"):
+                yield r
         else:
             # 通知下一个发言玩家
             next_player = game_room.speech_order[game_room.current_speaker_index]
-            await self.notify_room(game_room, f"下一位发言玩家：{next_player.user_name}")
+            async for r in self.notify_room(event, f"下一位发言玩家：{next_player.user_name}"):
+                yield r
     
     async def vote(self, event: AstrMessageEvent, target_name: str):
         """游戏中投票"""
@@ -356,7 +369,8 @@ class UndercoverPlugin(Star):
         
         # 记录投票
         game_room.votes[user_id] = target_player.user_id
-        await self.notify_room(game_room, f"{user_name} 投票给了 {target_player.user_name}")
+        async for r in self.notify_room(event, f"{user_name} 投票给了 {target_player.user_name}"):
+            yield r
         
         # 检查是否所有人都已投票
         alive_players = [p for p in game_room.players if p.is_alive]
@@ -374,12 +388,15 @@ class UndercoverPlugin(Star):
                 # 唯一得票最高者被淘汰
                 eliminated = eliminated_players[0]
                 eliminated.is_alive = False
-                await self.notify_room(game_room, f"投票结果：{eliminated.user_name} 被淘汰！\n" 
+                async for r in self.notify_room(event, f"投票结果：{eliminated.user_name} 被淘汰！\n" 
                                       f"身份：{eliminated.role}\n" 
-                                      f"词语：{eliminated.word}")
+                                      f"词语：{eliminated.word}"):
+                    yield r
                 
                 # 检查游戏是否结束
-                if await self.check_winner(game_room, event):
+                async for r in self.check_winner(game_room, event):
+                    yield r
+                if game_room.status == "ended":
                     return
                 
                 # 进入下一轮
@@ -392,32 +409,32 @@ class UndercoverPlugin(Star):
                 random.shuffle(game_room.speech_order)
                 
                 current_player = game_room.speech_order[game_room.current_speaker_index]
-                await self.notify_room(game_room, f"第 {game_room.round} 轮发言开始！\n" 
-                                      f"当前发言玩家：{current_player.user_name}")
+                async for r in self.notify_room(event, f"第 {game_room.round} 轮发言开始！\n" 
+                                      f"当前发言玩家：{current_player.user_name}"):
+                    yield r
             else:
                 # 平票，重新投票
-                await self.notify_room(game_room, f"投票结果平票：{', '.join(p.user_name for p in eliminated_players)}\n" 
-                                      "重新投票！")
+                async for r in self.notify_room(event, f"投票结果平票：{', '.join(p.user_name for p in eliminated_players)}\n" 
+                                      "重新投票！"):
+                    yield r
                 game_room.votes.clear()
     
-    async def check_winner(self, game_room: GameRoom, event: AstrMessageEvent) -> bool:
-        """检查游戏是否结束，返回True表示游戏结束"""
+    async def check_winner(self, game_room: GameRoom, event: AstrMessageEvent):
+        """检查游戏是否结束"""
         alive_players = [p for p in game_room.players if p.is_alive]
         alive_citizens = [p for p in alive_players if p.role == "citizen"]
         alive_undercovers = [p for p in alive_players if p.role == "undercover"]
         
         if len(alive_undercovers) == 0:
             # 平民胜利
-            await self.notify_room(game_room, "游戏结束！\n平民胜利！")
+            async for r in self.notify_room(event, "游戏结束！\n平民胜利！"):
+                yield r
             game_room.status = "ended"
-            return True
         elif len(alive_undercovers) >= len(alive_citizens):
             # 卧底胜利
-            await self.notify_room(game_room, "游戏结束！\n卧底胜利！")
+            async for r in self.notify_room(event, "游戏结束！\n卧底胜利！"):
+                yield r
             game_room.status = "ended"
-            return True
-        
-        return False
     
     async def end_game(self, event: AstrMessageEvent):
         """结束游戏"""
@@ -435,7 +452,8 @@ class UndercoverPlugin(Star):
             return
         
         # 通知所有玩家游戏结束
-        await self.notify_room(game_room, "游戏已结束")
+        async for r in self.notify_room(event, "游戏已结束"):
+            yield r
         
         # 清理房间数据
         for player in game_room.players:
@@ -471,12 +489,37 @@ class UndercoverPlugin(Star):
         
         yield event.plain_result(game_list)
     
+    async def get_word(self, event: AstrMessageEvent):
+        """获取自己的词语（建议私聊使用）"""
+        user_id = event.get_sender_id()
+        
+        if user_id not in self.user_rooms:
+            yield event.plain_result("你不在任何游戏房间中")
+            return
+        
+        room_id = self.user_rooms[user_id]
+        game_room = self.game_rooms[room_id]
+        
+        if game_room.status != "playing":
+            yield event.plain_result("游戏未开始")
+            return
+        
+        # 查找玩家
+        player = next((p for p in game_room.players if p.user_id == user_id), None)
+        if not player:
+            yield event.plain_result("未找到玩家信息")
+            return
+            
+        if not player.is_alive:
+            yield event.plain_result("你已被淘汰")
+            return
+            
+        yield event.plain_result(f"你的身份是：{player.role}\n你的词语是：{player.word}\n(请确保你在私聊中查看此消息)")
+    
     # 辅助函数
-    async def notify_room(self, game_room: GameRoom, message: str):
+    async def notify_room(self, event: AstrMessageEvent, message: str):
         """通知房间内所有玩家"""
-        # 由于AstrBot API限制，暂时使用事件对象的plain_result，实际部署时需要根据AstrBot的API调整
-        # 这里需要实现房间内所有玩家的消息通知
-        pass
+        yield event.plain_result(message)
     
     def load_word_pairs(self) -> list:
         """加载词语库"""
