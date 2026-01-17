@@ -29,7 +29,7 @@ class GameRoom:
         self.round = 1  # 当前轮次
 
 # 主插件类
-@register("undercover", "YourName", "谁是卧底游戏插件", "1.0.0")
+@register("undercover", "YourName", "谁是卧底游戏插件", "1.1.2")
 class UndercoverPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -388,9 +388,14 @@ class UndercoverPlugin(Star):
                 # 唯一得票最高者被淘汰
                 eliminated = eliminated_players[0]
                 eliminated.is_alive = False
-                async for r in self.notify_room(event, f"投票结果：{eliminated.user_name} 被淘汰！\n" 
-                                      f"身份：{eliminated.role}\n" 
-                                      f"词语：{eliminated.word}"):
+                role_name = "卧底" if eliminated.role == "undercover" else "平民"
+                
+                result_msg = (f"🗳️ 投票结果：\n"
+                            f"玩家 {eliminated.user_name} 被票出局！\n"
+                            f"👤 身份：{role_name}\n"
+                            f"📝 词语：{eliminated.word}")
+                            
+                async for r in self.notify_room(event, result_msg):
                     yield r
                 
                 # 检查游戏是否结束
@@ -425,14 +430,22 @@ class UndercoverPlugin(Star):
         alive_citizens = [p for p in alive_players if p.role == "citizen"]
         alive_undercovers = [p for p in alive_players if p.role == "undercover"]
         
+        winner = None
         if len(alive_undercovers) == 0:
-            # 平民胜利
-            async for r in self.notify_room(event, "游戏结束！\n平民胜利！"):
-                yield r
-            game_room.status = "ended"
+            winner = "平民"
         elif len(alive_undercovers) >= len(alive_citizens):
-            # 卧底胜利
-            async for r in self.notify_room(event, "游戏结束！\n卧底胜利！"):
+            winner = "卧底"
+            
+        if winner:
+            # 构建全员身份列表
+            player_list_str = "\n".join([
+                f"{p.user_name}：{'卧底' if p.role == 'undercover' else '平民'} - {p.word}"
+                for p in game_room.players
+            ])
+            
+            msg = f"游戏结束！\n{winner}胜利！\n\n全员身份公示：\n{player_list_str}"
+            
+            async for r in self.notify_room(event, msg):
                 yield r
             game_room.status = "ended"
     
@@ -514,7 +527,7 @@ class UndercoverPlugin(Star):
             yield event.plain_result("你已被淘汰")
             return
             
-        yield event.plain_result(f"你的身份是：{player.role}\n你的词语是：{player.word}\n(请确保你在私聊中查看此消息)")
+        yield event.plain_result(f"你的词语是：{player.word}\n(请确保你在私聊中查看此消息)")
     
     # 辅助函数
     async def notify_room(self, event: AstrMessageEvent, message: str):
