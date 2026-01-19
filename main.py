@@ -29,7 +29,7 @@ class GameRoom:
         self.round = 1  # 当前轮次
 
 # 主插件类
-@register("undercover", "YourName", "谁是卧底游戏插件", "1.1.2")
+@register("undercover", "YourName", "谁是卧底游戏插件", "1.1.3")
 class UndercoverPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -474,7 +474,6 @@ class UndercoverPlugin(Star):
                 del self.user_rooms[player.user_id]
         
         del self.game_rooms[room_id]
-        yield event.plain_result("游戏已结束")
     
     async def add_word_pair(self, event: AstrMessageEvent, word1: str, word2: str):
         """添加词语对"""
